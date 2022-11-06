@@ -12,7 +12,7 @@ import numpy as np
 import torch
 
 from utils import TryExcept, threaded
-
+from loguru import logger
 
 def fitness(x):
     # Model fitness as a weighted combination of metrics
@@ -28,7 +28,7 @@ def smooth(y, f=0.05):
     return np.convolve(yp, np.ones(nf) / nf, mode='valid')  # y-smoothed
 
 
-def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir='.', names=(), eps=1e-16, prefix=""):
+def ap_per_class(tp, conf, pred_cls, target_cls, conf_thres, plot=False, save_dir='.', names=(), eps=1e-16, prefix=""):
     """ Compute the average precision, given the recall and precision curves.
     Source: https://github.com/rafaelpadilla/Object-Detection-Metrics.
     # Arguments
@@ -63,6 +63,9 @@ def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir='.', names
         # Accumulate FPs and TPs
         fpc = (1 - tp[i]).cumsum(0)
         tpc = tp[i].cumsum(0)
+
+        logger.info(f'fpc@conf={conf_thres} = {np.interp(-conf_thres, -conf[i], fpc[:, 0])}')
+        logger.info(f'tpc@conf={conf_thres} = {np.interp(-conf_thres, -conf[i], tpc[:, 0])} \n')
 
         # Recall
         recall = tpc / (n_l + eps)  # recall curve
