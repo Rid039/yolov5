@@ -53,6 +53,7 @@ def ap_per_class(tp, conf, pred_cls, target_cls, conf_thres, plot=False, save_di
     # Create Precision-Recall curve and compute AP for each class
     px, py = np.linspace(0, 1, 1000), []  # for plotting
     ap, p, r = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000))
+    dict_report = {'p': None, 'r':None, 'ap50':None, 'ap':None, 'fpc':None, 'tpc':None, 'gtc':None, 'conf_thres':conf_thres}
     for ci, c in enumerate(unique_classes):
         i = pred_cls == c
         n_l = nt[ci]  # number of labels
@@ -75,11 +76,22 @@ def ap_per_class(tp, conf, pred_cls, target_cls, conf_thres, plot=False, save_di
         precision = tpc / (tpc + fpc)  # precision curve
         p[ci] = np.interp(-px, -conf[i], precision[:, 0], left=1)  # p at pr_score
 
+        # logger.info(f'precision@conf={conf_thres} = {np.interp(-conf_thres, -conf[i], precision[:, 0]):.4}')
+        # logger.info(f'recall@conf={conf_thres} = {np.interp(-conf_thres, -conf[i], recall[:, 0]):.4} \n')
+        
         # AP from recall-precision curve
         for j in range(tp.shape[1]):
             ap[ci, j], mpre, mrec = compute_ap(recall[:, j], precision[:, j])
             if plot and j == 0:
                 py.append(np.interp(px, mrec, mpre))  # precision at mAP@0.5
+        
+        # fill report
+        dict_report['gtc'] = n_l
+        dict_report['fpc'] = np.interp(-conf_thres, -conf[i], fpc[:, 0])
+        dict_report['tpc'] = np.interp(-conf_thres, -conf[i], tpc[:, 0])
+
+        dict_report['p'] = np.interp(-conf_thres, -conf[i], precision[:, 0])
+        dict_report['r'] = np.interp(-conf_thres, -conf[i], recall[:, 0])
 
     # Compute F1 (harmonic mean of precision and recall)
     f1 = 2 * p * r / (p + r + eps)
@@ -95,7 +107,7 @@ def ap_per_class(tp, conf, pred_cls, target_cls, conf_thres, plot=False, save_di
     p, r, f1 = p[:, i], r[:, i], f1[:, i]
     tp = (r * nt).round()  # true positives
     fp = (tp / (p + eps) - tp).round()  # false positives
-    return tp, fp, p, r, f1, ap, unique_classes.astype(int)
+    return tp, fp, p, r, f1, ap, unique_classes.astype(int), dict_report
 
 
 def compute_ap(recall, precision):

@@ -46,6 +46,7 @@ from utils.plots import output_to_target, plot_images, plot_val_study
 from utils.torch_utils import select_device, smart_inference_mode
 
 from loguru import logger
+import csv
 
 def save_one_txt(predn, save_conf, shape, file):
     # Save one txt result
@@ -104,6 +105,36 @@ def process_batch(detections, labels, iouv):
                 matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
             correct[matches[:, 1].astype(int), i] = True
     return torch.tensor(correct, dtype=torch.bool, device=iouv.device)
+
+def report2csv(dict_report:dict(), weight_path:str):
+    hnm = None
+    fold = None
+    for i in weight_path.split('/'):
+        if 'hnm' in i:
+            hnm = i[i.find('hnm'):]
+        elif 'ori' in i:
+            hnm = 'ori'
+
+        if 'fold' in i:
+            fold = i[i.find('fold')+4:]
+    
+    dict_report['hnm'] = hnm
+    dict_report['fold'] = fold 
+    
+    # dict_report = {'p': None, 'r':None, 'ap50':None, 'ap':None, 'fpc':None, 'tpc':None, 'gtc':None, 'conf_thres':conf_thres}
+    cols = [*dict_report.keys()]
+    rows = [dict_report]
+
+    filename = 'report_prc.csv'
+    mode = 'a' if filename in os.listdir() else 'w'
+
+    # writing to csv file 
+    with open(filename, mode) as csvfile: 
+        writer = csv.DictWriter(csvfile, fieldnames = cols) 
+        if mode == 'w':
+            writer.writeheader() 
+        writer.writerows(rows)
+        csvfile.close()
 
 
 @smart_inference_mode()
@@ -286,9 +317,12 @@ def run(
     # Compute metrics
     stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*stats)]  # to numpy
     if len(stats) and stats[0].any():
-        tp, fp, p, r, f1, ap, ap_class = ap_per_class(*stats, conf_thres, plot=plots, save_dir=save_dir, names=names)
+        tp, fp, p, r, f1, ap, ap_class, dict_report = ap_per_class(*stats, conf_thres, plot=plots, save_dir=save_dir, names=names)
         ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
         mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+        dict_report['ap50'] = map50
+        dict_report['ap'] = map
+        report2csv(dict_report, weights[0])
     nt = np.bincount(stats[3].astype(int), minlength=nc)  # number of targets per class
 
     # Print results
